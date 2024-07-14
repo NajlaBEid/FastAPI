@@ -4,6 +4,7 @@ from typing import Annotated
 import models
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
+from fastapi.encoders import jsonable_encoder
 
 
 app = FastAPI()
@@ -55,6 +56,17 @@ async def deleteUser(user_id: int, db: db_dependency):
         raise HTTPException(status_code=404, detail='User not found')
     db.delete(user)
     db.commit()
+
+
+@app.put("/users/{userId}", response_model= UserBase)
+async def upadte(user_id: int, user: UserBase, db: db_dependency):
+    db_user = db.query(models.User).get(user_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail='User not found')
+    db.query(models.User).filter(models.User.id == user_id).update(user.dict(), synchronize_session=False)
+    db.commit()
+    db.refresh(db_user)
+    return {"id": user_id, **user.dict()}
 
 
     

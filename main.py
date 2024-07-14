@@ -16,8 +16,11 @@ class UserBase(BaseModel):
     username: str
     email: str
 
+class PostBase(BaseModel):
+    title: str
+    content: str
+    user_id: int
 
-data = []
 
 
 
@@ -31,6 +34,9 @@ def get_db():
 
 db_dependency = Annotated[Session, Depends(get_db)]
 
+
+
+#user CRUD operations
 
 
 @app.post("/users/", status_code=status.HTTP_201_CREATED)
@@ -49,14 +55,6 @@ async def retrieveUser (user_id: int):
     return user
 
 
-@app.delete("/users/{user_id}",status_code=status.HTTP_200_OK)
-async def deleteUser(user_id: int, db: db_dependency):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail='User not found')
-    db.delete(user)
-    db.commit()
-
 
 @app.put("/users/{userId}", response_model= UserBase)
 async def upadte(user_id: int, user: UserBase, db: db_dependency):
@@ -67,6 +65,72 @@ async def upadte(user_id: int, user: UserBase, db: db_dependency):
     db.commit()
     db.refresh(db_user)
     return {"id": user_id, **user.dict()}
+
+
+@app.delete("/users/{user_id}",status_code=status.HTTP_200_OK)
+async def deleteUser(user_id: int, db: db_dependency):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail='User not found')
+    db.delete(user)
+    db.commit()
+
+
+
+
+
+
+#Post CRUD operations
+
+
+
+@app.post("/post/", status_code=status.HTTP_201_CREATED)
+async def createPost (post: PostBase, db: db_dependency):
+    db_post = models.Post(**post.dict())
+    db.add(db_post)
+    db.commit()
+
+
+@app.get("/posts/{post_id}", status_code=status.HTTP_200_OK)
+async def retrievePost (post_id: int):
+    db = SessionLocal()
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if post is None:
+        raise HTTPException(status_code=404, detail='Post not found')
+    return post
+
+
+
+@app.put("/posts/{postId}", response_model= PostBase)
+async def upadte(post_id: int, post: PostBase, db: db_dependency):
+    db_post = db.query(models.Post).get(post_id)
+    if post_id is None:
+        raise HTTPException(status_code=404, detail='Post not found')
+    db.query(models.Post).filter(models.Post.id == post_id).update(post.dict(), synchronize_session=False)
+    db.commit()
+    db.refresh(db_post)
+    return {"id": post_id, **post.dict()}
+
+
+@app.delete("/posts/{post_id}",status_code=status.HTTP_200_OK)
+async def deleteUser(post_id: int, db: db_dependency):
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if post is None:
+        raise HTTPException(status_code=404, detail='Post not found')
+    db.delete(post)
+    db.commit()
+
+
+
+
+#Get all post of user with id
+
+
+
+
+
+
+
 
 
     

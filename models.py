@@ -6,17 +6,9 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True)
+    email = Column(String(50),unique=True)
 
 
-
-class Post(Base):
-    __tablename__ = 'posts'
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(50))
-    content = Column(Integer)
-    user_id = Column(Integer)
-    
 
 
     

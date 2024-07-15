@@ -123,11 +123,13 @@ async def deleteUser(post_id: int, db: db_dependency):
 
 
 
-#Get all post of user with id
+#Get all post of specific user 
 
 
-
-
+@app.get("/users/{user_id}/posts")
+async def get_user_posts(user_id: int, db: db_dependency):
+    posts = db.query(models.Post).filter(models.Post.user_id == user_id).all()
+    return posts
 
 
 

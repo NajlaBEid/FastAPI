@@ -61,7 +61,7 @@ async def upadte(user_id: int, user: UserBase, db: db_dependency):
     db_user = db.query(models.User).get(user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail='User not found')
-    db.query(models.User).filter(models.User.id == user_id).update(user.dict(), synchronize_session=False)
+    db.query(models.User).filter(models.User.id == user_id).update(user.dict())
     db.commit()
     db.refresh(db_user)
     return {"id": user_id, **user.dict()}
@@ -74,8 +74,6 @@ async def deleteUser(user_id: int, db: db_dependency):
         raise HTTPException(status_code=404, detail='User not found')
     db.delete(user)
     db.commit()
-
-
 
 
 
@@ -106,7 +104,7 @@ async def upadte(post_id: int, post: PostBase, db: db_dependency):
     db_post = db.query(models.Post).get(post_id)
     if post_id is None:
         raise HTTPException(status_code=404, detail='Post not found')
-    db.query(models.Post).filter(models.Post.id == post_id).update(post.dict(), synchronize_session=False)
+    db.query(models.Post).filter(models.Post.id == post_id).update(post.dict())
     db.commit()
     db.refresh(db_post)
     return {"id": post_id, **post.dict()}
@@ -123,13 +121,25 @@ async def deleteUser(post_id: int, db: db_dependency):
 
 
 
-#Get all post of specific user 
+#Get all posts of specific user 
 
 
 @app.get("/users/{user_id}/posts")
 async def get_user_posts(user_id: int, db: db_dependency):
     posts = db.query(models.Post).filter(models.Post.user_id == user_id).all()
     return posts
+
+
+
+#Delete all post of specific user 
+
+
+@app.delete("/users/delete/{user_id}")
+async def delete_user_with_posts(user_id: int, db: db_dependency):
+    user = db.query(models.User).get(user_id)
+    db.query(models.Post).filter(models.Post.user_id == user_id).delete()
+    db.delete(user)
+    db.commit()
 
 
 

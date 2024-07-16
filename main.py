@@ -4,7 +4,7 @@ from typing import Annotated
 import models
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
-from fastapi.encoders import jsonable_encoder
+from sqlalchemy.orm import joinedload
 
 
 app = FastAPI()
@@ -35,7 +35,6 @@ def get_db():
 db_dependency = Annotated[Session, Depends(get_db)]
 
 
-
 #user CRUD operations
 
 
@@ -64,7 +63,7 @@ async def upadte(user_id: int, user: UserBase, db: db_dependency):
     db.query(models.User).filter(models.User.id == user_id).update(user.dict())
     db.commit()
     db.refresh(db_user)
-    return {"id": user_id, **user.dict()}
+    return db_user
 
 
 @app.delete("/users/{user_id}",status_code=status.HTTP_200_OK)
@@ -107,8 +106,7 @@ async def upadte(post_id: int, post: PostBase, db: db_dependency):
     db.query(models.Post).filter(models.Post.id == post_id).update(post.dict())
     db.commit()
     db.refresh(db_post)
-    return {"id": post_id, **post.dict()}
-
+    return db_post
 
 @app.delete("/posts/{post_id}",status_code=status.HTTP_200_OK)
 async def deleteUser(post_id: int, db: db_dependency):
@@ -141,6 +139,20 @@ async def delete_user_with_posts(user_id: int, db: db_dependency):
     db.delete(user)
     db.commit()
 
+
+
+#Retrieve user and associated posts
+
+@app.get("/users/{user_id}/posts/both/")
+async def get_user_with_posts(user_id: int, db: db_dependency):
+    user_with_posts = (
+        db.query(models.User)
+        .join(models.Post)
+        .filter(models.User.id == user_id)
+        .options(joinedload(models.User.posts))
+        .first()
+    )
+    return user_with_posts
 
 
 

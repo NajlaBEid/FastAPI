@@ -4,15 +4,19 @@ from typing import Annotated
 import models
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
-from sqlalchemy.orm import joinedload
+from datetime import datetime
 from fpdf import FPDF
-import os
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from io import BytesIO
+
 
 
 
 
 app = FastAPI()
+
+
+
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -41,7 +45,60 @@ class InvoiceBase(BaseModel):
     total: float
     tax: float
     customer_name: str 
-    customer_email: str 
+    customer_email: str
+    
+
+class BillingDetails(BaseModel):
+    id: int
+    amount: float  
+    discount: float 
+    tax: float 
+    total_amount: float
+    currency: str 
+    order_type: str 
+    subscription_type: str 
+    description: str 
+    status: str 
+    invoice_number: str 
+    is_offer: bool 
+    charge_id: str 
+    refund_id: str
+    user_id: int 
+    initiated_on: datetime 
+    authorized_on: datetime 
+    failed_on: datetime
+    paid_on: datetime 
+    canceled_on: datetime
+    refunded_on: datetime
+
+class Charge(BaseModel):
+    id: str
+    object: str
+    live_mode: bool
+    customer_initiated: bool
+    api_version: str
+    method: str
+    status: str
+    amount: int
+    currency: str
+    threeDSecure: bool
+    card_threeDSecure: bool
+    save_card: bool
+    product: str
+    reference: dict
+    response: dict
+    card_security: dict
+    security: dict
+    acquirer: dict
+    gateway: dict
+    card: dict
+    receipt: dict
+    customer: dict
+    merchant: dict
+    source: dict
+
+
+
 
 
 def get_db():
@@ -53,6 +110,36 @@ def get_db():
 
 
 db_dependency = Annotated[Session, Depends(get_db)]
+
+
+
+#Create charge
+@app.post("/charges/", status_code=status.HTTP_201_CREATED)
+async def create_charge(charge: Charge, db: db_dependency):
+    db_charge = models.Charge(**charge.dict())
+    db.add(db_charge)
+    db.commit()
+    db.refresh(db_charge) 
+
+
+#Create billing 
+@app.post("/billing/", status_code=status.HTTP_201_CREATED)
+async def create_billing(billing: BillingDetails, db: db_dependency):
+    db_billing = models.BillingDetails(**billing.dict())
+    db.add(db_billing)
+    db.commit()
+    db.refresh(db_billing)
+    return db_billing
+
+
+
+#Dawnlaod the invoice  
+
+
+
+
+
+
 
 
 #user CRUD operations
@@ -175,6 +262,10 @@ async def get_user_with_posts(user_id: int, db: db_dependency):
     return user_with_posts
 
 
+
+#Create purchase and invoice
+
+
 @app.post("/purchases/")
 async def create_purchase(purchase: PurchaseBase, db: db_dependency):
     db_purchase = models.Purchase(**purchase.dict())
@@ -206,27 +297,87 @@ def save_invoice(db_purchase: PurchaseBase, db):
     db.refresh(db_invoice)
 
 
-# Generate the invoice as a PDF
-@app.get("/invoice/{invoice_id}")
-async def get_invoice_as_pdf(invoice_id: int, db: db_dependency):
-    invoice = db.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
-    if invoice is None:
-        raise HTTPException(status_code=404, detail='Invoice not found')
 
-    pdf = FPDF()
+@app.get('/generate-invoice/{billing_id}')
+def generate_invoice(billing_id: int, db: db_dependency):
+    
+    billing_info = db.query(models.BillingDetails).filter(models.BillingDetails.id == billing_id).first()
+
+    if billing_info is None:
+        raise HTTPException(status_code=404, detail="Billing information not found")
+    class PDF(FPDF):
+        def header(self):
+            self.set_font('Arial', 'B', 12)
+            self.multi_cell(0, 5, 'Ringneck AI Company for\nInformation Technology,\nKACST, Al Raed Dist,\nKing Abdullah Road', align='R')
+            self.ln(10)
+            self.image('/Users/reema/Desktop/Najla- Projects/pics/ringnecklogo.jpg', x=10, y=10, w=40)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Arial', '', 8)
+            self.cell(0, 5, 'If you have question abount the invoice, Please contact:', 0, 0, 'C')
+            self.ln(5)  
+            self.cell(0, 5, 'info@ringneck.ai', 0, 0, 'C')
+            self.set_font('Arial', 'I', 8)
+            self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+            self.set_y(-10)
+           
+
+        def add_invoice_info(self, title, value):
+            
+            self.set_font('Arial', 'B', 12)
+            self.cell(60, 10, title, align='L')
+            self.cell(0, 10, value, align='L')
+            self.ln(10)
+
+        def add_table_row(self, left_column, right_column):
+            
+            self.set_font('Arial', '', 12)
+            self.cell(60, 10, left_column, border=1)
+            self.cell(0, 10, right_column, border=1)
+            self.ln(10)
+
+    pdf = PDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
 
-    pdf.cell(0, 20, "Invoice Details", align="C", ln=True) 
-    pdf.cell(0, 10, f"Invoice ID: {invoice.id}", ln=True)
+   
+    pdf.set_font('Arial', 'B', 16)
+    pdf.cell(0, 10, 'Invoice', ln=True, align='C')
+    pdf.ln(10)
 
-    pdf.cell(0, 10, f"Customer Name:  {invoice.customer_name}", ln=True)
-    pdf.cell(0, 10, f"Customer Email:  {invoice.customer_email}", ln=True)
-    pdf.cell(0, 10, f"Sub Total amount:  ${invoice.sub_total:.2f}", ln=True)
-    pdf.cell(0, 10, f"Tax amount (15%):  ${invoice.tax:.2f}", ln=True)
-    pdf.cell(0, 10, f"Total amount:  ${invoice.total:.2f}", ln=True)
+    pdf.add_invoice_info('Invoice Number:', billing_info.invoice_number)
+    pdf.add_invoice_info("User ID: ",str(billing_info.user_id))
+    pdf.add_invoice_info('Date:', str(billing_info.initiated_on))
+    pdf.ln(20)
 
-    pdf_file = f"invoice_{invoice_id}.pdf"
-    pdf.output(pdf_file)
-    return FileResponse(pdf_file, media_type="application/pdf", filename=pdf_file)
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, 'Pyament Details', ln=True)
+    pdf.set_font('Arial', '', 12)
+    pdf.add_table_row('Amount:', str(billing_info.amount))
+    pdf.add_table_row('Discount:', str(billing_info.discount))
+    pdf.add_table_row('Tax:', str(billing_info.tax))
+    
+    
+    total_amount = billing_info.amount + (billing_info.amount * (billing_info.tax / 100))
+    if billing_info.discount > 0:
+        total_amount -= total_amount * billing_info.discount / 100
 
+    pdf.add_table_row('Total Amount:', str(total_amount))
+    pdf.add_table_row('Currency:', billing_info.currency)
+    pdf.ln(10)
+
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, 'Order Details', ln=True)
+    pdf.set_font('Arial', '', 12)
+    pdf.add_table_row('Order Type:', billing_info.order_type)
+    pdf.add_table_row('Subscription Type:', billing_info.subscription_type)
+    pdf.add_table_row('Status:', billing_info.status)
+    pdf.ln(10)
+
+    pdf_bytes = pdf.output(dest='S')
+
+    return StreamingResponse(
+        BytesIO(bytes(pdf_bytes)),
+        media_type='application/pdf',
+        headers={'Content-Disposition': 'attachment; filename=invoice.pdf'}
+    )

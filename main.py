@@ -22,7 +22,9 @@ models.Base.metadata.create_all(bind=engine)
 
 
 class UserBase(BaseModel):
-    username: str
+    firstName: str
+    lastName: str
+    mobile: str
     email: str
  
 
@@ -114,7 +116,7 @@ db_dependency = Annotated[Session, Depends(get_db)]
 
 
 #Create charge
-@app.post("/charges/", status_code=status.HTTP_201_CREATED)
+@app.post("/charges/")
 async def create_charge(charge: Charge, db: db_dependency):
     db_charge = models.Charge(**charge.dict())
     db.add(db_charge)
@@ -145,14 +147,16 @@ async def create_billing(billing: BillingDetails, db: db_dependency):
 #user CRUD operations
 
 
-@app.post("/users/", status_code=status.HTTP_201_CREATED)
+@app.post("/users/", status_code=status.HTTP_200_OK)
 async def createUser (user: UserBase, db: db_dependency):
     db_user = models.User(**user.dict())
     db.add(db_user)
     db.commit()
+    db.refresh(db_user)
+    return db_user
 
 
-@app.get("/users/{user_id}", status_code=status.HTTP_200_OK)
+@app.get("/users/{user_id}")
 async def retrieveUser (user_id: int):
     db = SessionLocal()
     user = db.query(models.User).filter(models.User.id == user_id).first()
@@ -161,17 +165,20 @@ async def retrieveUser (user_id: int):
     return user
 
 
-
-@app.put("/users/{userId}", response_model= UserBase)
-async def upadte(user_id: int, user: UserBase, db: db_dependency):
-    db_user = db.query(models.User).get(user_id)
+@app.put("/users/{user_id}")
+async def update(user_id: int, user: UserBase, db: db_dependency):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if db_user is None:
-        raise HTTPException(status_code=404, detail='User not found')
-    db.query(models.User).filter(models.User.id == user_id).update(user.dict())
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    db_user.firstName = user.firstName
+    db_user.lastName = user.lastName
+    db_user.mobile = user.mobile
+    db_user.email = user.email
+
     db.commit()
     db.refresh(db_user)
     return db_user
-
 
 @app.delete("/users/{user_id}",status_code=status.HTTP_200_OK)
 async def deleteUser(user_id: int, db: db_dependency):
